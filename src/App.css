@@ -433,3 +433,35 @@ button {
     width: 100%;
   }
 }
+
+.star-rating {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 16px;
+}
+
+.star-button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 2rem;
+  line-height: 1;
+  color: #bdbdbd;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.star-button.selected {
+  color: #f5b301;
+}
+
+.star-button:hover {
+  transform: scale(1.15);
+}
+
+.star-button:focus-visible {
+  outline: 2px solid #f5b301;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
