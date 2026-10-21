@@ -1,8 +1,8 @@
+
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { supabase } from '../supabase'
 import '../App.css'
-import MovieDetails from './MovieDetails'
 
 type WatchStatus = 'por ver' | 'viendo' | 'vista'
 
@@ -36,25 +36,19 @@ export default function Home() {
   const [movies, setMovies] = useState<Movie[]>([])
   const [searchResults, setSearchResults] = useState<Movie[]>([])
   const [myList, setMyList] = useState<SavedMovie[]>([])
-  const [selectedMovie, setSelectedMovie] = useState<SavedMovie | null>(null)
-
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
   const [loadingList, setLoadingList] = useState(true)
-
   const [error, setError] = useState('')
   const [searchError, setSearchError] = useState('')
   const [listError, setListError] = useState('')
-
   const [hasSearched, setHasSearched] = useState(false)
   const [savingMovieId, setSavingMovieId] = useState<number | null>(null)
   const [removingMovieId, setRemovingMovieId] = useState<number | null>(null)
   const [updatingMovieId, setUpdatingMovieId] = useState<number | null>(null)
-
   const [saveMessage, setSaveMessage] = useState('')
   const [saveError, setSaveError] = useState('')
-
   const [editStatus, setEditStatus] = useState<Record<number, WatchStatus>>({})
   const [editRating, setEditRating] = useState<Record<number, string>>({})
   const [editComment, setEditComment] = useState<Record<number, string>>({})
@@ -116,7 +110,7 @@ export default function Home() {
           ])
         )
       )
-    } catch (err: unknown) {
+    } catch (err) {
       setListError(
         err instanceof Error
           ? err.message
@@ -148,7 +142,7 @@ export default function Home() {
 
         const data: TMDBResponse = await response.json()
         setMovies(data.results ?? [])
-      } catch (err: unknown) {
+      } catch (err) {
         setError(
           err instanceof Error
             ? err.message
@@ -159,8 +153,8 @@ export default function Home() {
       }
     }
 
-    void fetchMovies()
-    void fetchMyList()
+    fetchMovies()
+    fetchMyList()
   }, [])
 
   async function handleSaveMovie(movie: Movie) {
@@ -201,7 +195,7 @@ export default function Home() {
 
       await fetchMyList()
       setSaveMessage(`¡${title} se añadió a tu lista!`)
-    } catch (err: unknown) {
+    } catch (err) {
       setSaveError(
         err instanceof Error
           ? err.message
@@ -265,7 +259,7 @@ export default function Home() {
 
       await fetchMyList()
       setSaveMessage(`Cambios guardados para «${movie.title}».`)
-    } catch (err: unknown) {
+    } catch (err) {
       setSaveError(
         err instanceof Error
           ? err.message
@@ -312,12 +306,8 @@ export default function Home() {
         previous.filter((saved) => saved.id !== movie.id)
       )
 
-      if (selectedMovie?.id === movie.id) {
-        setSelectedMovie(null)
-      }
-
       setSaveMessage(`«${movie.title}» se quitó de tu lista.`)
-    } catch (err: unknown) {
+    } catch (err) {
       setSaveError(
         err instanceof Error
           ? err.message
@@ -364,7 +354,7 @@ export default function Home() {
 
       const data: TMDBResponse = await response.json()
       setSearchResults(data.results ?? [])
-    } catch (err: unknown) {
+    } catch (err) {
       setSearchResults([])
       setSearchError(
         err instanceof Error
@@ -425,21 +415,6 @@ export default function Home() {
           </button>
         </div>
       </article>
-    )
-  }
-
-  if (selectedMovie) {
-    return (
-      <MovieDetails
-        movieId={selectedMovie.movie_id}
-        title={selectedMovie.title}
-        posterPath={selectedMovie.poster_path}
-        personalRating={
-          Number(editRating[selectedMovie.id] ?? '0') || null
-        }
-        personalComment={editComment[selectedMovie.id] ?? ''}
-        onBack={() => setSelectedMovie(null)}
-      />
     )
   }
 
@@ -530,17 +505,9 @@ export default function Home() {
                   <div className="movie-info">
                     <h3>{movie.title}</h3>
 
-                    <button
-                      type="button"
-                      onClick={() => setSelectedMovie(movie)}
-                    >
-                      🔎 Ver detalles
-                    </button>
-
                     <label htmlFor={`status-${movie.id}`}>
                       Estado de visualización
                     </label>
-
                     <select
                       id={`status-${movie.id}`}
                       value={editStatus[movie.id] ?? 'por ver'}
@@ -556,12 +523,11 @@ export default function Home() {
                       <option value="vista">Vista</option>
                     </select>
 
-                    <label htmlFor={`rating-${movie.id}`}>
+                    <label>
                       Tu calificación personal
                     </label>
 
                     <div
-                      id={`rating-${movie.id}`}
                       className="star-rating"
                       role="group"
                       aria-label={`Calificación de ${movie.title}`}
@@ -595,7 +561,6 @@ export default function Home() {
                     <label htmlFor={`comment-${movie.id}`}>
                       Tu comentario personal
                     </label>
-
                     <textarea
                       id={`comment-${movie.id}`}
                       value={editComment[movie.id] ?? ''}
