@@ -198,3 +198,152 @@ button {
 .auth-card.signup-mode .auth-toggle {
   color: #ffb3df;
 }
+
+/* ==============================
+   HOME PAGE - MI CARTELERA
+============================== */
+
+.home-container {
+  min-height: 100vh;
+  padding: 40px clamp(20px, 5vw, 80px);
+  color: #f7f3ff;
+  background:
+    radial-gradient(ellipse at 10% 0%, rgba(123, 70, 193, 0.2), transparent 35%),
+    #100b1b;
+}
+
+.home-header {
+  margin-bottom: 48px;
+}
+
+.home-header h1 {
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(32px, 5vw, 48px);
+  letter-spacing: -1.5px;
+}
+
+.home-header h1 span {
+  color: #b58aff;
+}
+
+.home-header > p {
+  color: #c2b5d8;
+  font-size: 16px;
+  margin-top: 12px;
+}
+
+.movies-section h2 {
+  margin-bottom: 28px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 26px;
+}
+
+.movies-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 28px 20px;
+}
+
+.movie-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(201, 169, 255, 0.15);
+  border-radius: 18px;
+  background: rgba(34, 23, 52, 0.85);
+  transition: transform 0.25s ease, border-color 0.25s ease;
+}
+
+.movie-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(181, 138, 255, 0.65);
+}
+
+.movie-card > img,
+.movie-no-poster {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+}
+
+.movie-no-poster {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  color: #c2b5d8;
+  background: #211632;
+  text-align: center;
+}
+
+.movie-info {
+  padding: 16px;
+}
+
+.movie-info h3 {
+  margin: 0 0 10px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.movie-info > p {
+  color: #c2b5d8;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.movie-info .movie-overview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.home-footer {
+  margin-top: 56px;
+  padding: 24px 0;
+  border-top: 1px solid rgba(201, 169, 255, 0.15);
+  color: #a99abf;
+  font-size: 12px;
+  text-align: center;
+}
+
+.home-signout {
+  position: absolute;
+  top: 45px;
+  right: clamp(20px, 5vw, 80px);
+  padding: 10px 16px;
+  border: 1px solid rgba(201, 169, 255, 0.3);
+  border-radius: 12px;
+  color: #e9ddff;
+  background: #211632;
+}
+
+.home-signout:hover {
+  border-color: #b58aff;
+}
+
+@media (max-width: 600px) {
+  .home-container {
+    padding: 90px 16px 24px;
+  }
+
+  .home-header {
+    margin-bottom: 32px;
+  }
+
+  .movies-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 12px;
+  }
+
+  .movie-info {
+    padding: 12px;
+  }
+
+  .home-signout {
+    top: 20px;
+    right: 16px;
+  }
+}

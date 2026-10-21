@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import Auth from './components/Auth'
+import Home from './components/Home'
 import './App.css'
 
 function App() {
@@ -45,16 +46,16 @@ function App() {
   }
 
   return (
-    <main className="auth-container">
-      <section className="auth-card">
-        <h1>¡Bienvenido a tu cartelera! 🍿</h1>
-        <p>Has iniciado sesión con:</p>
-        <p>{user.email}</p>
-        <button type="button" onClick={handleSignOut}>
-          Cerrar sesión
-        </button>
-      </section>
-    </main>
+    <>
+      <Home />
+      <button
+        type="button"
+        className="home-signout"
+        onClick={handleSignOut}
+      >
+        Cerrar sesión
+      </button>
+    </>
   )
 }
 
