@@ -2,10 +2,11 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { supabase } from '../supabase'
-import '../App.css'
 import MovieDetails from './MovieDetails'
+import '../App.css'
 
 type WatchStatus = 'por ver' | 'viendo' | 'vista'
+type CollectionFilter = 'todas' | WatchStatus
 
 type Movie = {
   id: number
@@ -34,12 +35,23 @@ type TMDBResponse = {
   results: Movie[]
 }
 
+const posterUrl = (path: string) =>
+  `https://image.tmdb.org/t/p/w500${path}`
+
 export default function Home() {
   const [movies, setMovies] = useState<Movie[]>([])
+  const [expandedMovie, setExpandedMovie] = useState<Movie | null>(null)
   const [searchResults, setSearchResults] = useState<Movie[]>([])
   const [myList, setMyList] = useState<SavedMovie[]>([])
+
   const [selectedMovie, setSelectedMovie] =
     useState<SavedMovie | null>(null)
+
+  const [editingMovie, setEditingMovie] =
+    useState<SavedMovie | null>(null)
+
+  const [collectionFilter, setCollectionFilter] =
+    useState<CollectionFilter>('todas')
 
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -63,25 +75,43 @@ export default function Home() {
 
   const [editStatus, setEditStatus] =
     useState<Record<number, WatchStatus>>({})
+
   const [editRating, setEditRating] =
     useState<Record<number, string>>({})
+
   const [editComment, setEditComment] =
     useState<Record<number, string>>({})
 
-  // Películas guardadas por el usuario
   const savedMovieIds = myList.map(
     (movie) => movie.movie_id
   )
 
-  // Película protagonista del Home
   const featuredMovie = movies.find(
     (movie) => movie.backdrop_path && movie.overview
   )
 
-  // ====================================
-  // CARGAR MI COLECCIÓN DESDE SUPABASE
-  // ====================================
+  // CONTADORES
+  const counts = {
+    todas: myList.length,
+    'por ver': myList.filter(
+      (m) => m.watch_status === 'por ver'
+    ).length,
+    viendo: myList.filter(
+      (m) => m.watch_status === 'viendo'
+    ).length,
+    vista: myList.filter(
+      (m) => m.watch_status === 'vista'
+    ).length,
+  }
 
+  // FILTROS
+  const filteredList = myList.filter(
+    (movie) =>
+      collectionFilter === 'todas' ||
+      movie.watch_status === collectionFilter
+  )
+
+  // CARGAR COLECCIÓN
   async function fetchMyList() {
     setLoadingList(true)
     setListError('')
@@ -93,9 +123,7 @@ export default function Home() {
       } = await supabase.auth.getUser()
 
       if (userError || !user) {
-        throw new Error(
-          'Inicia sesión para consultar tu lista.'
-        )
+        throw new Error('Debes iniciar sesión.')
       }
 
       const { data, error } = await supabase
@@ -107,14 +135,9 @@ export default function Home() {
         .eq('media_type', 'movie')
         .order('created_at', { ascending: false })
 
-      if (error) {
-        throw new Error(
-          'No se pudo cargar tu lista personal.'
-        )
-      }
+      if (error) throw error
 
       const savedMovies = (data ?? []) as SavedMovie[]
-
       setMyList(savedMovies)
 
       setEditStatus(
@@ -130,9 +153,7 @@ export default function Home() {
         Object.fromEntries(
           savedMovies.map((movie) => [
             movie.id,
-            movie.personal_rating == null
-              ? '0'
-              : String(movie.personal_rating),
+            String(movie.personal_rating ?? 0),
           ])
         )
       )
@@ -145,21 +166,18 @@ export default function Home() {
           ])
         )
       )
-    } catch (err: unknown) {
+    } catch (err) {
       setListError(
         err instanceof Error
           ? err.message
-          : 'Ocurrió un error al cargar tu lista.'
+          : 'Error al cargar tu colección.'
       )
     } finally {
       setLoadingList(false)
     }
   }
 
-  // ====================================
-  // CARGAR PELÍCULAS POPULARES DE TMDB
-  // ====================================
-
+  // CARGAR PELÍCULAS
   useEffect(() => {
     async function fetchMovies() {
       const apiKey = import.meta.env.VITE_TMDB_API_KEY
@@ -176,19 +194,16 @@ export default function Home() {
         )
 
         if (!response.ok) {
-          throw new Error(
-            'No se pudieron cargar las películas populares.'
-          )
+          throw new Error('Error al cargar películas.')
         }
 
         const data: TMDBResponse = await response.json()
-
         setMovies(data.results ?? [])
-      } catch (err: unknown) {
+      } catch (err) {
         setError(
           err instanceof Error
             ? err.message
-            : 'Ocurrió un error al cargar el catálogo.'
+            : 'Error de conexión.'
         )
       } finally {
         setLoading(false)
@@ -199,10 +214,7 @@ export default function Home() {
     void fetchMyList()
   }, [])
 
-  // ====================================
-  // AGREGAR PELÍCULA A MI COLECCIÓN
-  // ====================================
-
+  // AGREGAR PELÍCULA
   async function handleSaveMovie(movie: Movie) {
     setSaveMessage('')
     setSaveError('')
@@ -215,14 +227,10 @@ export default function Home() {
       } = await supabase.auth.getUser()
 
       if (userError || !user) {
-        throw new Error(
-          'Inicia sesión para guardar películas.'
-        )
+        throw new Error('Debes iniciar sesión.')
       }
 
-      const title =
-        movie.title ??
-        movie.name ??
+      const title = movie.title ?? movie.name ??
         'Título no disponible'
 
       const { error } = await supabase
@@ -239,41 +247,29 @@ export default function Home() {
       if (error) {
         if (error.code === '23505') {
           await fetchMyList()
-
-          setSaveMessage(
-            'Esta película ya está en tu lista.'
-          )
+          setSaveMessage('Ya está en tu colección.')
           return
         }
-
-        throw new Error(
-          'No se pudo guardar la película. Inténtalo de nuevo.'
-        )
+        throw error
       }
 
       await fetchMyList()
-
-      setSaveMessage(
-        `¡${title} se añadió a tu lista!`
-      )
-    } catch (err: unknown) {
+      setSaveMessage(`¡${title} se añadió a tu colección!`)
+    } catch (err) {
       setSaveError(
         err instanceof Error
           ? err.message
-          : 'Ocurrió un error al guardar la película.'
+          : 'Error al guardar la película.'
       )
     } finally {
       setSavingMovieId(null)
     }
   }
 
-  // ====================================
-  // ACTUALIZAR UNA PELÍCULA GUARDADA
-  // ====================================
-
+  // ACTUALIZAR PELÍCULA
   async function handleUpdateMovie(movie: SavedMovie) {
-    setSaveMessage('')
     setSaveError('')
+    setSaveMessage('')
     setUpdatingMovieId(movie.id)
 
     try {
@@ -283,85 +279,58 @@ export default function Home() {
       } = await supabase.auth.getUser()
 
       if (userError || !user) {
-        throw new Error(
-          'Inicia sesión para editar tu lista.'
-        )
+        throw new Error('Debes iniciar sesión.')
       }
 
-      const ratingText =
+      const ratingNumber = Number(
         editRating[movie.id] ?? '0'
-
-      const ratingNumber = Number(ratingText)
-
-      const rating =
-        ratingNumber === 0
-          ? null
-          : ratingNumber
+      )
 
       if (
-        rating !== null &&
-        (
-          !Number.isInteger(rating) ||
-          rating < 1 ||
-          rating > 5
-        )
+        !Number.isInteger(ratingNumber) ||
+        ratingNumber < 0 ||
+        ratingNumber > 5
       ) {
-        throw new Error(
-          'La calificación debe estar entre 1 y 5 estrellas.'
-        )
+        throw new Error('La nota debe estar entre 1 y 5.')
       }
-
-      const status =
-        editStatus[movie.id] ?? 'por ver'
 
       const { data, error } = await supabase
         .from('movies')
         .update({
-          watch_status: status,
-          personal_rating: rating,
-          personal_comment:
-            editComment[movie.id] ?? '',
+          watch_status: editStatus[movie.id] ?? 'por ver',
+          personal_rating:
+            ratingNumber === 0 ? null : ratingNumber,
+          personal_comment: editComment[movie.id] ?? '',
         })
         .eq('id', movie.id)
         .eq('user_id', user.id)
         .select('id')
 
-      if (error) {
-        throw new Error(
-          'No se pudieron guardar los cambios.'
-        )
-      }
+      if (error) throw error
 
-      if (!data || data.length === 0) {
-        throw new Error(
-          'No se pudo actualizar la película. Revisa tus permisos.'
-        )
+      if (!data?.length) {
+        throw new Error('No tienes permiso para editar.')
       }
 
       await fetchMyList()
-
-      setSaveMessage(
-        `Cambios guardados para «${movie.title}».`
-      )
-    } catch (err: unknown) {
+      setEditingMovie(null)
+      setSaveMessage(`Cambios guardados en «${movie.title}».`)
+    } catch (err) {
       setSaveError(
         err instanceof Error
           ? err.message
-          : 'Ocurrió un error al actualizar la película.'
+          : 'Error al actualizar.'
       )
     } finally {
       setUpdatingMovieId(null)
     }
   }
 
-  // ====================================
-  // ELIMINAR PELÍCULA DE MI COLECCIÓN
-  // ====================================
-
+  // ELIMINAR PELÍCULA
   async function handleRemoveMovie(movie: SavedMovie) {
-    setSaveMessage('')
     setSaveError('')
-    setRemovingMovieId(movie.movie_id)
+    setSaveMessage('')
+    setRemovingMovieId(movie.id)
 
     try {
       const {
@@ -370,9 +339,7 @@ export default function Home() {
       } = await supabase.auth.getUser()
 
       if (userError || !user) {
-        throw new Error(
-          'Inicia sesión para modificar tu lista.'
-        )
+        throw new Error('Debes iniciar sesión.')
       }
 
       const { data, error } = await supabase
@@ -382,46 +349,31 @@ export default function Home() {
         .eq('user_id', user.id)
         .select('id')
 
-      if (error) {
-        throw new Error(
-          'No se pudo quitar la película de tu lista.'
-        )
-      }
+      if (error) throw error
 
-      if (!data || data.length === 0) {
-        throw new Error(
-          'No se pudo eliminar la película. Revisa tus permisos.'
-        )
+      if (!data?.length) {
+        throw new Error('No tienes permiso para eliminar.')
       }
 
       setMyList((previous) =>
-        previous.filter(
-          (saved) => saved.id !== movie.id
-        )
+        previous.filter((item) => item.id !== movie.id)
       )
 
-      if (selectedMovie?.id === movie.id) {
-        setSelectedMovie(null)
-      }
-
-      setSaveMessage(
-        `«${movie.title}» se quitó de tu lista.`
-      )
-    } catch (err: unknown) {
+      setEditingMovie(null)
+      setSelectedMovie(null)
+      setSaveMessage(`«${movie.title}» se eliminó.`)
+    } catch (err) {
       setSaveError(
         err instanceof Error
           ? err.message
-          : 'Ocurrió un error al quitar la película.'
+          : 'Error al eliminar.'
       )
     } finally {
       setRemovingMovieId(null)
     }
   }
 
-  // ====================================
-  // BUSCAR PELÍCULAS EN TMDB
-  // ====================================
-
+  // BUSCAR EN TMDB
   async function handleSearch(
     event: FormEvent<HTMLFormElement>
   ) {
@@ -430,20 +382,15 @@ export default function Home() {
     const query = search.trim()
 
     if (!query) {
-      setSearchError(
-        'Escribe el nombre de una película.'
-      )
+      setSearchError('Escribe una película.')
       setHasSearched(false)
       return
     }
 
-    const apiKey =
-      import.meta.env.VITE_TMDB_API_KEY
+    const apiKey = import.meta.env.VITE_TMDB_API_KEY
 
     if (!apiKey) {
-      setSearchError(
-        'No se encontró la API Key de TMDB.'
-      )
+      setSearchError('No se encontró la API Key.')
       setHasSearched(false)
       return
     }
@@ -451,6 +398,7 @@ export default function Home() {
     setSearching(true)
     setSearchError('')
     setHasSearched(true)
+    setSearchResults([])
     setSaveMessage('')
     setSaveError('')
 
@@ -460,22 +408,17 @@ export default function Home() {
       )
 
       if (!response.ok) {
-        throw new Error(
-          'No se pudo realizar la búsqueda.'
-        )
+        throw new Error('No se pudo realizar la búsqueda.')
       }
 
-      const data: TMDBResponse =
-        await response.json()
-
+      const data: TMDBResponse = await response.json()
       setSearchResults(data.results ?? [])
-    } catch (err: unknown) {
+    } catch (err) {
       setSearchResults([])
-
       setSearchError(
         err instanceof Error
           ? err.message
-          : 'Ocurrió un error al buscar películas.'
+          : 'Error al buscar.'
       )
     } finally {
       setSearching(false)
@@ -491,141 +434,74 @@ export default function Home() {
     setSaveError('')
   }
 
-  // ====================================
-  // TARJETAS DE PELÍCULAS
-  // ====================================
-
+  // TARJETAS DEL CATÁLOGO: póster y título; la ficha abre a pantalla completa.
   function renderMovie(movie: Movie) {
-    const title =
-      movie.title ??
-      movie.name ??
-      'Título no disponible'
-
-    const releaseDate =
-      movie.release_date ??
-      movie.first_air_date
-
-    const year = releaseDate
-      ? releaseDate.slice(0, 4)
-      : 'Año desconocido'
-
-    const isSaved =
-      savedMovieIds.includes(movie.id)
+    const title = movie.title ?? movie.name ?? 'Título no disponible'
 
     return (
-      <article
-        className="movie-card"
-        key={movie.id}
-      >
-        {movie.poster_path ? (
-          <img
-            src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
-            alt={`Póster de ${title}`}
-            loading="lazy"
-          />
-        ) : (
-          <div className="movie-no-poster">
-            Póster no disponible
+      <article className="catalog-flip-card" key={movie.id}>
+        <div className="catalog-flip-inner">
+          <div className="catalog-flip-front">
+            <button
+              type="button"
+              className="catalog-poster-button"
+              onClick={() => {
+                setSaveMessage('')
+                setSaveError('')
+                setExpandedMovie(movie)
+              }}
+              aria-label={`Ver ficha completa de ${title}`}
+            >
+              {movie.poster_path ? (
+                <img
+                  src={posterUrl(movie.poster_path)}
+                  alt={`Póster de ${title}`}
+                  loading="lazy"
+                />
+              ) : (
+                <div className="catalog-no-poster">Póster no disponible</div>
+              )}
+              <div className="catalog-front-overlay">
+                <h3>{title}</h3>
+                <span className="catalog-flip-hint">VER DETALLES ↗</span>
+              </div>
+            </button>
           </div>
-        )}
-
-        <div className="movie-info">
-          <h3>{title}</h3>
-
-          <p>📅 {year}</p>
-
-          <p>
-            ⭐ {Number(
-              movie.vote_average ?? 0
-            ).toFixed(1)} / 10 (TMDB)
-          </p>
-
-          <p className="movie-overview">
-            {movie.overview ||
-              'Sin sinopsis disponible.'}
-          </p>
-
-          <button
-            type="button"
-            onClick={() =>
-              handleSaveMovie(movie)
-            }
-            disabled={
-              isSaved ||
-              savingMovieId === movie.id
-            }
-          >
-            {savingMovieId === movie.id
-              ? 'Guardando...'
-              : isSaved
-                ? '✓ En mi lista'
-                : '＋ Añadir a mi lista'}
-          </button>
         </div>
       </article>
     )
   }
 
-  // ====================================
-  // PÁGINA DE DETALLES
-  // ====================================
-
+  // DETALLES
   if (selectedMovie) {
     return (
       <MovieDetails
         movieId={selectedMovie.movie_id}
         title={selectedMovie.title}
         posterPath={selectedMovie.poster_path}
-        personalRating={
-          Number(
-            editRating[selectedMovie.id] ?? '0'
-          ) || null
-        }
-        personalComment={
-          editComment[selectedMovie.id] ?? ''
-        }
-        onBack={() =>
-          setSelectedMovie(null)
-        }
+        personalRating={selectedMovie.personal_rating}
+        personalComment={selectedMovie.personal_comment}
+        onBack={() => setSelectedMovie(null)}
       />
     )
   }
 
-  // ====================================
-  // HOME EDITORIAL
-  // ====================================
-
   return (
     <main className="home-container">
-
-      {/* NAVEGACIÓN */}
+      {/* NAVBAR */}
       <header className="home-header">
-        <a
-          href="#inicio"
-          className="home-logo"
-        >
+        <a href="#inicio" className="home-logo">
           MI CARTELERA<span>.</span>
         </a>
 
-        <nav
-          className="home-nav"
-          aria-label="Navegación principal"
-        >
-          <a href="#explorar">
-            Explorar
-          </a>
-
-          <a href="#mi-coleccion">
-            Mi colección
-          </a>
+        <nav className="home-nav">
+          <a href="#explorar">Explorar</a>
+          <a href="#mi-coleccion">Mi colección</a>
         </nav>
       </header>
 
-      {/* INTRODUCCIÓN */}
-      <section
-        className="editorial-intro"
-        id="inicio"
-      >
+      {/* INTRO */}
+      <section className="editorial-intro" id="inicio">
         <span className="editorial-eyebrow">
           TU UNIVERSO CINEMATOGRÁFICO / 2026
         </span>
@@ -633,15 +509,12 @@ export default function Home() {
         <h1>
           El cine se vive.
           <br />
-          <em>
-            Las historias permanecen.
-          </em>
+          <em>Las historias permanecen.</em>
         </h1>
 
         <p>
-          Descubre nuevas películas,
-          guarda tus favoritas y construye
-          una colección que cuente tu historia.
+          Descubre nuevas películas, guarda tus favoritas
+          y construye una colección que cuente tu historia.
         </p>
       </section>
 
@@ -649,29 +522,24 @@ export default function Home() {
       {featuredMovie && (
         <section
           className="featured-movie"
-          aria-label="Película destacada"
           style={{
             backgroundImage: `
               linear-gradient(
                 90deg,
-                rgba(10, 8, 9, 0.96) 0%,
-                rgba(10, 8, 9, 0.73) 45%,
-                rgba(10, 8, 9, 0.18) 100%
+                rgba(10,8,9,.96),
+                rgba(10,8,9,.72) 45%,
+                rgba(10,8,9,.18)
               ),
               url(https://image.tmdb.org/t/p/w1280${featuredMovie.backdrop_path})
             `,
           }}
         >
           <div className="featured-content">
-
             <span className="editorial-eyebrow">
               SELECCIÓN DESTACADA
             </span>
 
-            <h2>
-              {featuredMovie.title ??
-                featuredMovie.name}
-            </h2>
+            <h2>{featuredMovie.title}</h2>
 
             <p className="featured-description">
               {featuredMovie.overview}
@@ -681,23 +549,19 @@ export default function Home() {
               <span>
                 {featuredMovie.release_date?.slice(0, 4)}
               </span>
-
               <span>
-                ★ {featuredMovie.vote_average.toFixed(1)}
-                {' '}TMDB
+                ★ {featuredMovie.vote_average.toFixed(1)} TMDB
               </span>
             </div>
 
             <button
               type="button"
               className="featured-button"
-              onClick={() =>
-                handleSaveMovie(featuredMovie)
-              }
               disabled={
                 savedMovieIds.includes(featuredMovie.id) ||
                 savingMovieId === featuredMovie.id
               }
+              onClick={() => handleSaveMovie(featuredMovie)}
             >
               {savingMovieId === featuredMovie.id
                 ? 'Guardando...'
@@ -705,7 +569,6 @@ export default function Home() {
                   ? '✓ En mi colección'
                   : '+ Añadir a mi colección'}
             </button>
-
           </div>
         </section>
       )}
@@ -715,6 +578,9 @@ export default function Home() {
         className="movie-search-section"
         id="explorar"
       >
+        <span className="editorial-eyebrow">
+          DESCUBRIR NUEVAS HISTORIAS
+        </span>
         <h2>Explorar películas</h2>
 
         <form
@@ -724,322 +590,450 @@ export default function Home() {
           <input
             type="search"
             value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Busca una película por su nombre..."
             aria-label="Buscar películas"
           />
 
-          <button
-            type="submit"
-            disabled={searching}
-          >
-            {searching
-              ? 'Buscando...'
-              : 'Buscar'}
+          <button type="submit" disabled={searching}>
+            {searching ? 'Buscando...' : 'Buscar'}
           </button>
 
           {hasSearched && (
-            <button
-              type="button"
-              onClick={clearSearch}
-            >
+            <button type="button" onClick={clearSearch}>
               Limpiar
             </button>
           )}
         </form>
 
-        {searchError && (
-          <p role="alert">
-            {searchError}
-          </p>
+        {searchError && <p role="alert">{searchError}</p>}
+        {searching && <p>Buscando películas...</p>}
+        {saveMessage && <p role="status">{saveMessage}</p>}
+        {saveError && <p role="alert">{saveError}</p>}
+
+        {hasSearched && !searching && !searchError && (
+          <div className="search-results">
+            <h3>Resultados de búsqueda</h3>
+
+            {searchResults.length ? (
+              <div className="movies-grid">
+                {searchResults.map(renderMovie)}
+              </div>
+            ) : (
+              <p>No encontramos películas con ese nombre.</p>
+            )}
+          </div>
         )}
-
-        {searching && (
-          <p>Buscando películas...</p>
-        )}
-
-        {saveMessage && (
-          <p role="status">
-            {saveMessage}
-          </p>
-        )}
-
-        {saveError && (
-          <p role="alert">
-            {saveError}
-          </p>
-        )}
-
-        {hasSearched &&
-          !searching &&
-          !searchError && (
-            <div className="search-results">
-
-              <h3>
-                Resultados de búsqueda
-              </h3>
-
-              {searchResults.length > 0 ? (
-                <div className="movies-grid">
-                  {searchResults.map(renderMovie)}
-                </div>
-              ) : (
-                <p>
-                  No encontramos películas
-                  con ese nombre.
-                </p>
-              )}
-
-            </div>
-          )}
       </section>
 
-      {/* MI COLECCIÓN PERSONAL */}
+      {/* NUEVA COLECCIÓN EDITORIAL */}
       <section
-        className="my-list-section"
+        className="my-list-section editorial-collection"
         id="mi-coleccion"
       >
-        <h2>Mi colección personal</h2>
-
-        {loadingList && (
-          <p>Cargando tu lista...</p>
-        )}
-
-        {listError && (
-          <p role="alert">
-            {listError}
-          </p>
-        )}
-
-        {!loadingList &&
-          !listError &&
-          myList.length === 0 && (
+        <div className="collection-heading">
+          <div>
+            <span className="editorial-eyebrow">
+              MI ARCHIVO CINEMATOGRÁFICO
+            </span>
+            <h2>Mi colección personal<span>.</span></h2>
             <p>
-              Todavía no tienes películas
-              guardadas. ¡Busca una película
-              y añádela a tu colección!
+              Cada película es una historia que forma
+              parte de tu colección.
             </p>
+          </div>
+
+          <div className="collection-total">
+            <strong>{counts.todas}</strong>
+            <span>PELÍCULAS</span>
+          </div>
+        </div>
+
+        {/* CONTADORES */}
+        <div className="collection-summary">
+          <div>
+            <strong>{counts['por ver']}</strong>
+            <span>Por ver</span>
+          </div>
+
+          <div>
+            <strong>{counts.viendo}</strong>
+            <span>Viendo</span>
+          </div>
+
+          <div>
+            <strong>{counts.vista}</strong>
+            <span>Vistas</span>
+          </div>
+        </div>
+
+        {/* FILTROS */}
+        <div className="collection-filters">
+          {([
+            ['todas', 'Todas'],
+            ['por ver', 'Por ver'],
+            ['viendo', 'Viendo'],
+            ['vista', 'Vistas'],
+          ] as [CollectionFilter, string][]).map(
+            ([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={
+                  collectionFilter === value
+                    ? 'filter-button active'
+                    : 'filter-button'
+                }
+                onClick={() => setCollectionFilter(value)}
+                aria-pressed={collectionFilter === value}
+              >
+                {label}
+                <span>{counts[value]}</span>
+              </button>
+            )
           )}
+        </div>
 
-        {!loadingList &&
-          myList.length > 0 && (
-            <div className="movies-grid">
+        {loadingList && <p>Cargando colección...</p>}
+        {listError && <p role="alert">{listError}</p>}
 
-              {myList.map((movie) => {
-                const currentRating = Number(
-                  editRating[movie.id] ?? '0'
-                )
-
-                return (
+        {!loadingList && !listError && (
+          <>
+            {filteredList.length === 0 ? (
+              <div className="collection-empty">
+                <span>✦</span>
+                <h3>
+                  {myList.length === 0
+                    ? 'Tu colección comienza aquí.'
+                    : 'Todavía no hay películas en esta categoría.'}
+                </h3>
+                <p>
+                  Explora películas y construye
+                  tu propio archivo cinematográfico.
+                </p>
+                <a href="#explorar">Explorar películas →</a>
+              </div>
+            ) : (
+              <div className="collection-grid">
+                {filteredList.map((movie) => (
                   <article
-                    className="movie-card"
+                    className="collection-card"
                     key={movie.id}
                   >
-                    {movie.poster_path ? (
-                      <img
-                        src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
-                        alt={`Póster de ${movie.title}`}
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="movie-no-poster">
-                        Póster no disponible
+                    <div className="collection-poster">
+                      {movie.poster_path ? (
+                        <img
+                          src={posterUrl(movie.poster_path)}
+                          alt={`Póster de ${movie.title}`}
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="movie-no-poster">
+                          Póster no disponible
+                        </div>
+                      )}
+
+                      <span className="collection-status">
+                        {movie.watch_status === 'por ver'
+                          ? 'POR VER'
+                          : movie.watch_status === 'viendo'
+                            ? 'VIENDO'
+                            : 'VISTA'}
+                      </span>
+                    </div>
+
+                    <div className="collection-card-info">
+                      <h3>{movie.title}</h3>
+
+                      <p className="collection-rating">
+                        {movie.personal_rating
+                          ? `★ ${movie.personal_rating} / 5`
+                          : '☆ Sin calificar'}
+                      </p>
+
+                      <div className="collection-actions">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedMovie(movie)}
+                        >
+                          Ver detalles ↗
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSaveError('')
+                            setEditingMovie(movie)
+                          }}
+                        >
+                          Editar
+                        </button>
                       </div>
-                    )}
-
-                    <div className="movie-info">
-
-                      <h3>
-                        {movie.title}
-                      </h3>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedMovie(movie)
-                        }
-                      >
-                        Ver detalles →
-                      </button>
-
-                      <label
-                        htmlFor={`status-${movie.id}`}
-                      >
-                        Estado de visualización
-                      </label>
-
-                      <select
-                        id={`status-${movie.id}`}
-                        value={
-                          editStatus[movie.id] ??
-                          'por ver'
-                        }
-
-                        onChange={(event) => {
-                          const newStatus = event.target.value as WatchStatus
-
-                          setEditStatus((previous) => ({
-                            ...previous,
-                            [movie.id]: newStatus,
-                          }))
-                        }}
-
-                      >
-                        <option value="por ver">
-                          Por ver
-                        </option>
-                        <option value="viendo">
-                          Viendo
-                        </option>
-                        <option value="vista">
-                          Vista
-                        </option>
-                      </select>
-
-                      <label
-                        htmlFor={`rating-${movie.id}`}
-                      >
-                        Tu calificación personal
-                      </label>
-
-                      <div
-                        id={`rating-${movie.id}`}
-                        className="star-rating"
-                        role="group"
-                        aria-label={`Calificación de ${movie.title}`}
-                      >
-                        {[1, 2, 3, 4, 5].map(
-                          (star) => (
-                            <button
-                              key={star}
-                              type="button"
-                              className={
-                                star <= currentRating
-                                  ? 'star-button selected'
-                                  : 'star-button'
-                              }
-                              onClick={() =>
-                                setEditRating(
-                                  (previous) => ({
-                                    ...previous,
-                                    [movie.id]:
-                                      Number(
-                                        previous[movie.id] ??
-                                        '0'
-                                      ) === star
-                                        ? '0'
-                                        : String(star),
-                                  })
-                                )
-                              }
-                              aria-label={`${star} estrellas`}
-                              aria-pressed={
-                                star <= currentRating
-                              }
-                            >
-                              ★
-                            </button>
-                          )
-                        )}
-                      </div>
-
-                      <label
-                        htmlFor={`comment-${movie.id}`}
-                      >
-                        Tu comentario personal
-                      </label>
-
-                      <textarea
-                        id={`comment-${movie.id}`}
-                        value={
-                          editComment[movie.id] ?? ''
-                        }
-                        onChange={(event) =>
-                          setEditComment(
-                            (previous) => ({
-                              ...previous,
-                              [movie.id]:
-                                event.target.value,
-                            })
-                          )
-                        }
-                        placeholder="¿Qué te pareció esta película?"
-                        rows={3}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleUpdateMovie(movie)
-                        }
-                        disabled={
-                          updatingMovieId === movie.id
-                        }
-                      >
-                        {updatingMovieId === movie.id
-                          ? 'Guardando cambios...'
-                          : 'Guardar cambios'}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleRemoveMovie(movie)
-                        }
-                        disabled={
-                          removingMovieId === movie.movie_id
-                        }
-                      >
-                        {removingMovieId === movie.movie_id
-                          ? 'Quitando...'
-                          : 'Eliminar de mi lista'}
-                      </button>
-
                     </div>
                   </article>
-                )
-              })}
-
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </section>
 
-      {/* PELÍCULAS POPULARES */}
+      {/* POPULARES */}
       {!hasSearched && (
         <section className="movies-section">
+          <span className="editorial-eyebrow">
+            DESCUBRE QUÉ VER
+          </span>
+          <h2>Selección popular</h2>
 
-          <h2>
-            Selección popular
-          </h2>
-
-          {loading && (
-            <p>
-              Cargando películas...
-            </p>
-          )}
-
-          {error && (
-            <p role="alert">
-              {error}
-            </p>
-          )}
+          {loading && <p>Cargando películas...</p>}
+          {error && <p role="alert">{error}</p>}
 
           {!loading && !error && (
             <div className="movies-grid">
               {movies.map(renderMovie)}
             </div>
           )}
-
         </section>
       )}
 
-      {/* FOOTER */}
       <footer className="home-footer">
         Datos e imágenes proporcionados por TMDB.
       </footer>
+      
+{/* FICHA CINEMATOGRÁFICA A PANTALLA COMPLETA */}
+{expandedMovie && (
+  <div className="cinema-overlay">
+    <section
+      className="cinema-expanded"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Detalles de ${expandedMovie.title ?? expandedMovie.name}`}
+    >
+      <button
+        type="button"
+        className="cinema-close"
+        onClick={() => setExpandedMovie(null)}
+        aria-label="Cerrar detalles"
+      >
+        ×
+      </button>
 
+      <div className="cinema-expanded-image">
+        {expandedMovie.poster_path ? (
+          <img
+            src={posterUrl(expandedMovie.poster_path)}
+            alt={`Póster de ${expandedMovie.title ?? expandedMovie.name}`}
+          />
+        ) : (
+          <div className="catalog-no-poster">
+            Póster no disponible
+          </div>
+        )}
+      </div>
+
+      <div className="cinema-expanded-content">
+        <span className="editorial-eyebrow">
+          MI CARTELERA / FICHA CINEMATOGRÁFICA
+        </span>
+
+        <h2>
+          {expandedMovie.title ?? expandedMovie.name}
+        </h2>
+
+        <div className="cinema-expanded-meta">
+          <span>
+            {(
+              expandedMovie.release_date ??
+              expandedMovie.first_air_date ??
+              ''
+            ).slice(0, 4)}
+          </span>
+          <span>
+            ★ {Number(expandedMovie.vote_average ?? 0).toFixed(1)} / 10 TMDB
+          </span>
+        </div>
+
+        <div className="cinema-expanded-divider" />
+
+        <span className="editorial-eyebrow">
+          SINOPSIS
+        </span>
+
+        <p className="cinema-expanded-overview">
+          {expandedMovie.overview || 'Sin sinopsis disponible.'}
+        </p>
+
+        <button
+          type="button"
+          className="cinema-expanded-add"
+          onClick={() => handleSaveMovie(expandedMovie)}
+          disabled={
+            savedMovieIds.includes(expandedMovie.id) ||
+            savingMovieId === expandedMovie.id
+          }
+        >
+          {savingMovieId === expandedMovie.id
+            ? 'Guardando...'
+            : savedMovieIds.includes(expandedMovie.id)
+              ? '✓ En mi colección'
+              : '+ Añadir a mi colección'}
+        </button>
+
+        {saveMessage && <p role="status">{saveMessage}</p>}
+        {saveError && <p role="alert">{saveError}</p>}
+      </div>
+    </section>
+  </div>
+)}
+
+
+      {/* PANEL DE EDICIÓN */}
+      {editingMovie && (
+        <div className="editor-overlay">
+          <section
+            className="editor-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="editor-title"
+          >
+            <div className="editor-top">
+              <span className="editorial-eyebrow">
+                EDITAR MI COLECCIÓN
+              </span>
+
+              <button
+                type="button"
+                className="editor-close"
+                onClick={() => setEditingMovie(null)}
+                aria-label="Cerrar editor"
+                disabled={updatingMovieId !== null}
+              >
+                ×
+              </button>
+            </div>
+
+            <h2 id="editor-title">{editingMovie.title}</h2>
+            <p className="editor-subtitle">
+              Personaliza tu experiencia con esta película.
+            </p>
+
+            <label htmlFor="editor-status">
+              Estado de visualización
+            </label>
+
+            <select
+              id="editor-status"
+              value={
+                editStatus[editingMovie.id] ?? 'por ver'
+              }
+              onChange={(event) => {
+                const newStatus =
+                  event.target.value as WatchStatus
+
+                setEditStatus((previous) => ({
+                  ...previous,
+                  [editingMovie.id]: newStatus,
+                }))
+              }}
+            >
+              <option value="por ver">Por ver</option>
+              <option value="viendo">Viendo</option>
+              <option value="vista">Vista</option>
+            </select>
+
+            <label>Mi calificación personal</label>
+
+            <div
+              className="editor-stars"
+              role="group"
+              aria-label="Calificación personal"
+            >
+              {[1, 2, 3, 4, 5].map((star) => {
+                const current = Number(
+                  editRating[editingMovie.id] ?? '0'
+                )
+
+                return (
+                  <button
+                    key={star}
+                    type="button"
+                    className={
+                      star <= current ? 'selected' : ''
+                    }
+                    aria-label={`${star} estrellas`}
+                    aria-pressed={star <= current}
+                    onClick={() => {
+                      setEditRating((previous) => ({
+                        ...previous,
+                        [editingMovie.id]:
+                          current === star
+                            ? '0'
+                            : String(star),
+                      }))
+                    }}
+                  >
+                    ★
+                  </button>
+                )
+              })}
+            </div>
+
+            <label htmlFor="editor-comment">
+              Mi comentario
+            </label>
+
+            <textarea
+              id="editor-comment"
+              rows={4}
+              placeholder="¿Qué te hizo sentir esta película?"
+              value={editComment[editingMovie.id] ?? ''}
+              onChange={(event) => {
+                setEditComment((previous) => ({
+                  ...previous,
+                  [editingMovie.id]: event.target.value,
+                }))
+              }}
+            />
+
+            {saveError && (
+              <p className="editor-error" role="alert">
+                {saveError}
+              </p>
+            )}
+
+            <button
+              type="button"
+              className="editor-save"
+              disabled={updatingMovieId === editingMovie.id}
+              onClick={() => handleUpdateMovie(editingMovie)}
+            >
+              {updatingMovieId === editingMovie.id
+                ? 'Guardando...'
+                : 'Guardar cambios →'}
+            </button>
+
+            <button
+              type="button"
+              className="editor-delete"
+              disabled={removingMovieId === editingMovie.id}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `¿Eliminar «${editingMovie.title}» de tu colección?`
+                  )
+                ) {
+                  void handleRemoveMovie(editingMovie)
+                }
+              }}
+            >
+              {removingMovieId === editingMovie.id
+                ? 'Eliminando...'
+                : 'Eliminar de mi colección'}
+            </button>
+          </section>
+        </div>
+      )}
     </main>
   )
 }
