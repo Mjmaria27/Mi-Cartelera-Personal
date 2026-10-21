@@ -1,5 +1,6 @@
 
 import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { supabase } from '../supabase'
 import '../App.css'
 
@@ -10,7 +11,7 @@ export default function Auth() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setMessage('')
     setLoading(true)
@@ -52,62 +53,135 @@ export default function Auth() {
 
   return (
     <main className="auth-container">
-      <form
-        className={`auth-card ${isSignUp ? 'signup-mode' : ''}`}
-        onSubmit={handleSubmit}
-      >
-        <h1>Mi Cartelera Personal</h1>
 
-        <p>
-          {isSignUp
-            ? 'Crea tu cuenta y organiza tus películas favoritas.'
-            : 'Inicia sesión para entrar a tu cartelera.'}
-        </p>
+      {/* PANEL IZQUIERDO */}
+      <section className="auth-editorial">
 
-        <label htmlFor="email">Correo electrónico</label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          autoComplete="email"
-        />
+        <div className="auth-brand">
+          MI CARTELERA<span>.</span>
+        </div>
 
-        <label htmlFor="password">Contraseña</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          minLength={6}
-          autoComplete={isSignUp ? 'new-password' : 'current-password'}
-        />
+        <div className="auth-editorial-copy">
 
-        <button type="submit" disabled={loading}>
-          {loading
-            ? 'Cargando...'
-            : isSignUp
-              ? 'Crear cuenta'
-              : 'Iniciar sesión'}
-        </button>
+          <span className="auth-eyebrow">
+            TU ARCHIVO PERSONAL DE CINE — EST. 2026
+          </span>
 
-        {message && <p role="status">{message}</p>}
+          <h2>
+            Las historias
+            <br />
+            que se quedan
+            <br />
+            <em>contigo.</em>
+          </h2>
 
-        <button
-          type="button"
-          className="auth-toggle"
-          onClick={() => {
-            setIsSignUp(!isSignUp)
-            setMessage('')
-          }}
+          <p>
+            Un espacio para descubrir, guardar y recordar
+            el cine que te mueve.
+          </p>
+
+        </div>
+
+        <span className="auth-edition">
+          UNA COLECCIÓN DE HISTORIAS, A TU MANERA.
+        </span>
+
+      </section>
+
+      {/* PANEL DERECHO */}
+      <section className="auth-panel">
+
+        <form
+          className={`auth-card ${isSignUp ? 'signup-mode' : ''}`}
+          onSubmit={handleSubmit}
         >
-          {isSignUp
-            ? '¿Ya tienes cuenta? Inicia sesión'
-            : '¿No tienes cuenta? Regístrate'}
-        </button>
-      </form>
+
+          <span className="auth-eyebrow">
+            MI CARTELERA / ACCESO PERSONAL
+          </span>
+
+          <h1>
+            {isSignUp
+              ? 'Tu historia comienza aquí.'
+              : 'Bienvenido de nuevo.'}
+          </h1>
+
+          <p>
+            {isSignUp
+              ? 'Crea tu cuenta para comenzar tu colección de cine.'
+              : 'Continúa explorando las historias que más te gustan.'}
+          </p>
+
+          <label htmlFor="email">
+            Correo electrónico
+          </label>
+
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="tu@correo.com"
+            required
+            autoComplete="email"
+          />
+
+          <label htmlFor="password">
+            Contraseña
+          </label>
+
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Mínimo 6 caracteres"
+            required
+            minLength={6}
+            autoComplete={
+              isSignUp ? 'new-password' : 'current-password'
+            }
+          />
+
+          <button
+            type="submit"
+            disabled={loading}
+          >
+            {loading
+              ? 'Cargando...'
+              : isSignUp
+                ? 'Crear mi cuenta →'
+                : 'Entrar a mi cartelera →'}
+          </button>
+
+          {message && (
+            <p role="status" aria-live="polite">
+              {message}
+            </p>
+          )}
+
+          <button
+            type="button"
+            className="auth-toggle"
+            onClick={() => {
+              setIsSignUp(!isSignUp)
+              setMessage('')
+            }}
+          >
+            {isSignUp
+              ? '¿Ya tienes cuenta? Inicia sesión'
+              : '¿Aún no tienes cuenta? Regístrate'}
+          </button>
+
+          <span className="auth-form-footer">
+            CADA PELÍCULA TIENE UNA HISTORIA.
+            ESTA ES LA TUYA.
+          </span>
+
+        </form>
+
+      </section>
+
     </main>
   )
 }

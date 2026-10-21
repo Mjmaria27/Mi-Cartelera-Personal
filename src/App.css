@@ -465,3 +465,364 @@ button {
   outline-offset: 3px;
   border-radius: 4px;
 }
+
+/* ======================================
+   PR #1 - CINE EDITORIAL
+   LOGIN Y REGISTRO
+====================================== */
+
+/* ESTRUCTURA PRINCIPAL */
+
+.auth-container {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(400px, 0.95fr);
+  padding: 0;
+  overflow: hidden;
+  background: #11100f;
+  color: #e8ded0;
+}
+
+/* Eliminar decoraciones anteriores */
+
+.auth-container::before,
+.auth-container::after {
+  display: none;
+}
+
+/* PANEL IZQUIERDO */
+
+.auth-editorial {
+  position: relative;
+  min-height: 100vh;
+  padding: clamp(28px, 4vw, 64px);
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  isolation: isolate;
+  overflow: hidden;
+  background: #32191f;
+}
+
+.auth-editorial::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(10, 7, 8, 0.24),
+      rgba(10, 7, 8, 0.34) 38%,
+      rgba(10, 7, 8, 0.88)
+    ),
+    url('https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1600&q=85')
+    center / cover;
+}
+
+.auth-editorial::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+
+  background: linear-gradient(
+    90deg,
+    rgba(57, 17, 25, 0.32),
+    transparent
+  );
+}
+
+/* IDENTIDAD */
+
+.auth-brand {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #fff;
+}
+
+.auth-brand span {
+  color: #d19a9c;
+}
+
+.auth-eyebrow,
+.auth-edition,
+.auth-form-footer {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  line-height: 1.8;
+}
+
+.auth-eyebrow {
+  color: #c99a9d;
+}
+
+/* TEXTO EDITORIAL */
+
+.auth-editorial-copy {
+  max-width: 650px;
+}
+
+.auth-editorial-copy h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(42px, 5.2vw, 82px);
+  line-height: 1.09;
+  letter-spacing: -0.04em;
+
+  margin: 20px 0;
+  color: #f7eee3;
+}
+
+.auth-editorial-copy h2 em {
+  color: #e1b7b4;
+  font-weight: 400;
+}
+
+.auth-editorial-copy p {
+  max-width: 390px;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #e0d1cb;
+}
+
+.auth-edition {
+  color: #e5d1cb;
+}
+
+/* PANEL DERECHO */
+
+.auth-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 48px clamp(24px, 6vw, 90px);
+  background: #11100f;
+}
+
+/* TARJETA DEL FORMULARIO */
+
+.auth-card,
+.auth-card.signup-mode {
+  width: 100%;
+  max-width: 460px;
+
+  margin: 0;
+  padding: 0;
+
+  position: relative;
+  z-index: 1;
+
+  border: 0;
+  border-radius: 0;
+
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.auth-card h1,
+.auth-card.signup-mode h1 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(38px, 4vw, 57px);
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+
+  margin: 18px 0 14px;
+  color: #f2e8dd;
+}
+
+.auth-card > p {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #a99d98;
+
+  margin: 0 0 30px;
+}
+
+/* INPUTS */
+
+.auth-card label {
+  display: block;
+
+  margin: 21px 0 9px;
+
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #d9cbc1;
+}
+
+.auth-card input {
+  display: block;
+  width: 100%;
+  height: 51px;
+
+  padding: 0 15px;
+
+  border: 1px solid #4a3838;
+  border-radius: 3px;
+
+  background: #1b1818;
+  color: #f5eee7;
+  outline: none;
+}
+
+.auth-card input::placeholder {
+  color: #817471;
+}
+
+.auth-card input:focus,
+.auth-card.signup-mode input:focus {
+  border-color: #bd7e85;
+  box-shadow: 0 0 0 3px rgba(142, 48, 62, 0.18);
+}
+
+/* BOTÓN PRINCIPAL */
+
+.auth-card button[type='submit'],
+.auth-card.signup-mode button[type='submit'] {
+  width: 100%;
+  min-height: 52px;
+
+  margin-top: 29px;
+  padding: 14px 18px;
+
+  border: 0;
+  border-radius: 3px;
+
+  background: #8e303e;
+  color: #fff;
+
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+
+  box-shadow: none;
+  transition: background 0.2s ease;
+}
+
+.auth-card button[type='submit']:hover {
+  background: #a94150;
+  transform: none;
+}
+
+.auth-card button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* CAMBIO ENTRE LOGIN Y REGISTRO */
+
+.auth-card .auth-toggle,
+.auth-card.signup-mode .auth-toggle {
+  display: block;
+
+  width: 100%;
+  margin: 22px auto 0;
+  padding: 8px;
+
+  border: 0;
+  background: transparent;
+
+  color: #d5aaa8;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* MENSAJES */
+
+.auth-card [role='status'] {
+  margin-top: 16px;
+  padding: 12px;
+
+  border: 0;
+  border-left: 2px solid #b97780;
+  border-radius: 0;
+
+  background: #251c1d;
+  color: #e8ded0;
+
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* TEXTO INFERIOR */
+
+.auth-form-footer {
+  display: block;
+
+  margin-top: 60px;
+
+  text-align: center;
+  color: #81736e;
+}
+
+/* ======================================
+   RESPONSIVE - TABLET
+====================================== */
+
+@media (max-width: 850px) {
+  .auth-container {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-editorial {
+    min-height: 360px;
+    padding: 28px 24px;
+  }
+
+  .auth-editorial-copy h2 {
+    font-size: clamp(38px, 8vw, 60px);
+  }
+
+  .auth-editorial-copy p {
+    font-size: 13px;
+  }
+
+  .auth-panel {
+    padding: 50px 24px 65px;
+  }
+
+  .auth-form-footer {
+    margin-top: 38px;
+  }
+}
+
+/* ======================================
+   RESPONSIVE - CELULAR
+====================================== */
+
+@media (max-width: 480px) {
+  .auth-editorial {
+    min-height: 320px;
+  }
+
+  .auth-editorial-copy h2 {
+    font-size: 40px;
+  }
+
+  .auth-card h1,
+  .auth-card.signup-mode h1 {
+    font-size: 38px;
+  }
+}
+
+/* Corregir el autocompletado de Chrome */
+
+.auth-card input:-webkit-autofill,
+.auth-card input:-webkit-autofill:hover,
+.auth-card input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f5eee7;
+  -webkit-box-shadow: 0 0 0 1000px #1b1818 inset;
+  caret-color: #f5eee7;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
