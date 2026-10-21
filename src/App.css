@@ -347,3 +347,88 @@ button {
     right: 16px;
   }
 }
+
+/* BUSCADOR DE PELÍCULAS */
+
+.movie-search-section {
+  margin-bottom: 48px;
+}
+
+.movie-search-section h2,
+.search-results h3 {
+  margin-bottom: 20px;
+  font-family: 'Outfit', sans-serif;
+}
+
+.movie-search-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 760px;
+  margin-bottom: 24px;
+}
+
+.movie-search-form input {
+  flex: 1;
+  min-width: 200px;
+  padding: 14px 16px;
+  border: 1px solid rgba(201, 169, 255, 0.3);
+  border-radius: 12px;
+  outline: none;
+  color: #f7f3ff;
+  background: #211632;
+  font: inherit;
+}
+
+.movie-search-form input:focus {
+  border-color: #b58aff;
+  box-shadow: 0 0 0 3px rgba(181, 138, 255, 0.15);
+}
+
+.movie-search-form input::placeholder {
+  color: #a99abf;
+}
+
+.movie-search-form button {
+  padding: 12px 20px;
+  border: 1px solid #b58aff;
+  border-radius: 12px;
+  color: #160d23;
+  background: #b58aff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.movie-search-form button[type='button'] {
+  color: #e9ddff;
+  background: #211632;
+}
+
+.movie-search-form button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.movie-search-section [role='alert'] {
+  color: #ff9da9;
+}
+
+.search-results {
+  margin-top: 28px;
+}
+
+@media (max-width: 600px) {
+  .movie-search-form {
+    flex-direction: column;
+  }
+
+  .movie-search-form input {
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .movie-search-form button {
+    width: 100%;
+  }
+}
