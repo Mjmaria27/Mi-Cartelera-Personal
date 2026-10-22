@@ -8,6 +8,9 @@ import '../App.css'
 type MediaType = 'movie' | 'tv'
 type WatchStatus = 'por ver' | 'viendo' | 'vista'
 type CollectionFilter = 'todas' | WatchStatus
+type DiscoverType = 'all' | MediaType
+type DiscoverSort = 'popular' | 'rating' | 'recent'
+type Genre = { id: number; name: string; mediaTypes: MediaType[] }
 
 type Movie = {
   id: number
@@ -46,6 +49,16 @@ export default function Home() {
   const [expandedSeasons, setExpandedSeasons] = useState<number | null>(null)
   const [loadingSeasons, setLoadingSeasons] = useState(false)
   const [searchResults, setSearchResults] = useState<Movie[]>([])
+  const [genres, setGenres] = useState<Genre[]>([])
+  const [genresError, setGenresError] = useState('')
+  const [selectedGenre, setSelectedGenre] = useState<number | null>(null)
+  const [discoverType, setDiscoverType] = useState<DiscoverType>('all')
+  const [discoverSort, setDiscoverSort] = useState<DiscoverSort>('popular')
+  const [discoverPage, setDiscoverPage] = useState(1)
+  const [discoverResults, setDiscoverResults] = useState<Movie[]>([])
+  const [discoverLoading, setDiscoverLoading] = useState(false)
+  const [discoverError, setDiscoverError] = useState('')
+  const [discoverHasMore, setDiscoverHasMore] = useState(false)
   const [myList, setMyList] = useState<SavedMovie[]>([])
 
   const [selectedMovie, setSelectedMovie] =
@@ -151,6 +164,123 @@ export default function Home() {
     void loadSeasons()
     return () => controller.abort()
   }, [expandedMovie])
+
+  // CATEGORÍAS: TMDB proporciona géneros diferentes para películas y series.
+  useEffect(() => {
+    const key = import.meta.env.VITE_TMDB_API_KEY
+    if (!key) {
+      setGenresError('Falta la API Key de TMDB.')
+      return
+    }
+    const controller = new AbortController()
+    async function loadGenres() {
+      try {
+        const results = await Promise.all(
+          (['movie', 'tv'] as MediaType[]).map(async (type) => {
+            const response = await fetch(
+              `https://api.themoviedb.org/3/genre/${type}/list?api_key=${key}&language=es-ES`,
+              { signal: controller.signal }
+            )
+            if (!response.ok) throw new Error('No se pudieron cargar las categorías.')
+            const data: { genres: { id: number; name: string }[] } = await response.json()
+            return { type, list: data.genres ?? [] }
+          })
+        )
+        if (controller.signal.aborted) return
+        const combined = new Map<number, Genre>()
+        for (const { type, list } of results) {
+          for (const { id, name } of list) {
+            const previous = combined.get(id)
+            if (previous) previous.mediaTypes.push(type)
+            else combined.set(id, { id, name, mediaTypes: [type] })
+          }
+        }
+        setGenres([...combined.values()].sort((a, b) => a.name.localeCompare(b.name, 'es')))
+        setGenresError('')
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setGenresError(error instanceof Error ? error.message : 'Error al cargar las categorías.')
+        }
+      }
+    }
+    void loadGenres()
+    return () => controller.abort()
+  }, [])
+
+  // DESCUBRIR POR GÉNERO, TIPO Y ORDEN; cada página agrega resultados.
+  useEffect(() => {
+    if (selectedGenre === null) return
+    const key = import.meta.env.VITE_TMDB_API_KEY
+    if (!key) {
+      setDiscoverError('Falta la API Key de TMDB.')
+      return
+    }
+    const genre = genres.find((item) => item.id === selectedGenre)
+    if (!genre) return
+    const types = (discoverType === 'all' ? genre.mediaTypes : [discoverType])
+      .filter((type) => genre.mediaTypes.includes(type))
+    const controller = new AbortController()
+    async function loadDiscover() {
+      setDiscoverLoading(true)
+      setDiscoverError('')
+      try {
+        const responses = await Promise.all(types.map(async (type) => {
+          const sorting = discoverSort === 'popular'
+            ? 'popularity.desc'
+            : discoverSort === 'rating'
+              ? 'vote_average.desc'
+              : type === 'movie' ? 'primary_release_date.desc' : 'first_air_date.desc'
+          const params = new URLSearchParams({
+            api_key: key,
+            language: 'es-ES',
+            with_genres: String(selectedGenre),
+            sort_by: sorting,
+            page: String(discoverPage),
+            include_adult: 'false',
+            ...(discoverSort === 'rating' ? { 'vote_count.gte': '100' } : {}),
+            ...(discoverSort === 'recent' && type === 'movie'
+              ? { 'primary_release_date.lte': new Date().toISOString().slice(0, 10) }
+              : {}),
+            ...(discoverSort === 'recent' && type === 'tv'
+              ? { 'first_air_date.lte': new Date().toISOString().slice(0, 10) }
+              : {}),
+          })
+          const response = await fetch(
+            `https://api.themoviedb.org/3/discover/${type}?${params.toString()}`,
+            { signal: controller.signal }
+          )
+          if (!response.ok) throw new Error('No se pudieron cargar los títulos de esta categoría.')
+          const data: TMDBResponse & { page: number; total_pages: number } = await response.json()
+          return {
+            items: (data.results ?? []).map((item) => ({ ...item, media_type: type })),
+            hasMore: data.page < data.total_pages && data.page < 500,
+          }
+        }))
+        if (controller.signal.aborted) return
+        const merged = responses.flatMap((result) => result.items)
+        merged.sort((a, b) => {
+          if (discoverSort === 'rating') return b.vote_average - a.vote_average
+          if (discoverSort === 'recent') return (
+            (b.release_date ?? b.first_air_date ?? '').localeCompare(a.release_date ?? a.first_air_date ?? '')
+          )
+          return 0
+        })
+        setDiscoverResults((previous) => {
+          const all = discoverPage === 1 ? merged : [...previous, ...merged]
+          return [...new Map(all.map((item) => [`${item.media_type}:${item.id}`, item])).values()]
+        })
+        setDiscoverHasMore(responses.some((result) => result.hasMore))
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setDiscoverError(error instanceof Error ? error.message : 'Error al explorar categorías.')
+        }
+      } finally {
+        if (!controller.signal.aborted) setDiscoverLoading(false)
+      }
+    }
+    void loadDiscover()
+    return () => controller.abort()
+  }, [selectedGenre, discoverType, discoverSort, discoverPage, genres])
 
   // CARGAR COLECCIÓN
   async function fetchMyList() {
@@ -544,6 +674,7 @@ export default function Home() {
 
         <nav className="home-nav">
           <a href="#explorar">Explorar</a>
+          <a href="#categorias">Categorías</a>
           <a href="#mi-coleccion">Mi colección</a>
         </nav>
       </header>
@@ -671,6 +802,93 @@ export default function Home() {
               <p>No encontramos películas ni series con ese nombre.</p>
             )}
           </div>
+        )}
+      </section>
+
+      {/* EXPLORAR POR CATEGORÍAS */}
+      <section className="genre-section" id="categorias">
+        <span className="editorial-eyebrow">UN UNIVERSO DE HISTORIAS</span>
+        <h2>Explorar por <em>categorías.</em></h2>
+        <p className="genre-intro">Descubre películas y series de tus géneros favoritos. Elige una categoría y explora tantas opciones como quieras.</p>
+
+        {genresError && <p role="alert">{genresError}</p>}
+        {!genresError && genres.length === 0 && <p>Cargando categorías...</p>}
+
+        <div className="genre-chips" aria-label="Géneros cinematográficos">
+          {genres.map((genre) => (
+            <button
+              type="button"
+              key={genre.id}
+              className={`genre-chip ${selectedGenre === genre.id ? 'active' : ''}`}
+              aria-pressed={selectedGenre === genre.id}
+              onClick={() => {
+                setDiscoverResults([])
+                setDiscoverPage(1)
+                setDiscoverError('')
+                setSelectedGenre(genre.id)
+              }}
+            >
+              {genre.name}
+            </button>
+          ))}
+        </div>
+
+        {selectedGenre !== null && (
+          <>
+            <div className="genre-toolbar">
+              <h3>{genres.find((genre) => genre.id === selectedGenre)?.name}</h3>
+              <div className="genre-options">
+                <label>
+                  <span>TIPO</span>
+                  <select
+                    value={discoverType}
+                    onChange={(event) => {
+                      setDiscoverResults([])
+                      setDiscoverPage(1)
+                      setDiscoverType(event.target.value as DiscoverType)
+                    }}
+                  >
+                    <option value="all">Películas y series</option>
+                    <option value="movie">Películas</option>
+                    <option value="tv">Series</option>
+                  </select>
+                </label>
+                <label>
+                  <span>ORDENAR POR</span>
+                  <select
+                    value={discoverSort}
+                    onChange={(event) => {
+                      setDiscoverResults([])
+                      setDiscoverPage(1)
+                      setDiscoverSort(event.target.value as DiscoverSort)
+                    }}
+                  >
+                    <option value="popular">Popularidad</option>
+                    <option value="rating">Mejor valoradas</option>
+                    <option value="recent">Más recientes</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            {discoverError && <p role="alert">{discoverError}</p>}
+            {discoverLoading && <p role="status">Explorando títulos...</p>}
+            {discoverResults.length > 0 && (
+              <div className="movies-grid">{discoverResults.map(renderMovie)}</div>
+            )}
+            {!discoverLoading && !discoverError && discoverResults.length === 0 && (
+              <p>No encontramos títulos con estos filtros. Prueba otra categoría o tipo.</p>
+            )}
+            {discoverHasMore && (
+              <button
+                type="button"
+                className="genre-load-more"
+                disabled={discoverLoading}
+                onClick={() => setDiscoverPage((page) => page + 1)}
+              >
+                {discoverLoading ? 'Cargando...' : 'Ver más títulos ↓'}
+              </button>
+            )}
+          </>
         )}
       </section>
 
