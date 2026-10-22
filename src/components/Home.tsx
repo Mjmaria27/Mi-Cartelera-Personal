@@ -5,11 +5,13 @@ import { supabase } from '../supabase'
 import MovieDetails from './MovieDetails'
 import '../App.css'
 
+type MediaType = 'movie' | 'tv'
 type WatchStatus = 'por ver' | 'viendo' | 'vista'
 type CollectionFilter = 'todas' | WatchStatus
 
 type Movie = {
   id: number
+  media_type: MediaType
   title?: string
   name?: string
   poster_path: string | null
@@ -25,7 +27,7 @@ type SavedMovie = {
   movie_id: number
   title: string
   poster_path: string | null
-  media_type: string
+  media_type: MediaType
   watch_status: WatchStatus
   personal_rating: number | null
   personal_comment: string | null
@@ -41,6 +43,8 @@ const posterUrl = (path: string) =>
 export default function Home() {
   const [movies, setMovies] = useState<Movie[]>([])
   const [expandedMovie, setExpandedMovie] = useState<Movie | null>(null)
+  const [expandedSeasons, setExpandedSeasons] = useState<number | null>(null)
+  const [loadingSeasons, setLoadingSeasons] = useState(false)
   const [searchResults, setSearchResults] = useState<Movie[]>([])
   const [myList, setMyList] = useState<SavedMovie[]>([])
 
@@ -64,7 +68,7 @@ export default function Home() {
 
   const [hasSearched, setHasSearched] = useState(false)
   const [savingMovieId, setSavingMovieId] =
-    useState<number | null>(null)
+    useState<string | null>(null)
   const [removingMovieId, setRemovingMovieId] =
     useState<number | null>(null)
   const [updatingMovieId, setUpdatingMovieId] =
@@ -82,9 +86,10 @@ export default function Home() {
   const [editComment, setEditComment] =
     useState<Record<number, string>>({})
 
-  const savedMovieIds = myList.map(
-    (movie) => movie.movie_id
+  const savedKeys = new Set(
+    myList.map((item) => `${item.media_type}:${item.movie_id}`)
   )
+  const movieKey = (movie: Movie) => `${movie.media_type}:${movie.id}`
 
   const featuredMovie = movies.find(
     (movie) => movie.backdrop_path && movie.overview
@@ -111,6 +116,42 @@ export default function Home() {
       movie.watch_status === collectionFilter
   )
 
+  // CONSULTAR LAS TEMPORADAS AL ABRIR LA FICHA DE UNA SERIE
+  useEffect(() => {
+    setExpandedSeasons(null)
+    setLoadingSeasons(false)
+
+    if (!expandedMovie || expandedMovie.media_type !== 'tv') return
+
+    const apiKey = import.meta.env.VITE_TMDB_API_KEY
+    if (!apiKey) return
+
+    const controller = new AbortController()
+    setLoadingSeasons(true)
+
+    async function loadSeasons() {
+      try {
+        const response = await fetch(
+          `https://api.themoviedb.org/3/tv/${expandedMovie!.id}?api_key=${apiKey}&language=es-ES`,
+          { signal: controller.signal }
+        )
+        if (!response.ok) throw new Error('No se pudieron consultar las temporadas.')
+
+        const data: { number_of_seasons?: number } = await response.json()
+        if (!controller.signal.aborted) {
+          setExpandedSeasons(data.number_of_seasons ?? null)
+        }
+      } catch {
+        if (!controller.signal.aborted) setExpandedSeasons(null)
+      } finally {
+        if (!controller.signal.aborted) setLoadingSeasons(false)
+      }
+    }
+
+    void loadSeasons()
+    return () => controller.abort()
+  }, [expandedMovie])
+
   // CARGAR COLECCIÓN
   async function fetchMyList() {
     setLoadingList(true)
@@ -132,7 +173,6 @@ export default function Home() {
           'id, movie_id, title, poster_path, media_type, watch_status, personal_rating, personal_comment'
         )
         .eq('user_id', user.id)
-        .eq('media_type', 'movie')
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -198,7 +238,7 @@ export default function Home() {
         }
 
         const data: TMDBResponse = await response.json()
-        setMovies(data.results ?? [])
+        setMovies((data.results ?? []).map((movie) => ({ ...movie, media_type: 'movie' })))
       } catch (err) {
         setError(
           err instanceof Error
@@ -218,7 +258,7 @@ export default function Home() {
   async function handleSaveMovie(movie: Movie) {
     setSaveMessage('')
     setSaveError('')
-    setSavingMovieId(movie.id)
+    setSavingMovieId(movieKey(movie))
 
     try {
       const {
@@ -240,7 +280,7 @@ export default function Home() {
           movie_id: movie.id,
           title,
           poster_path: movie.poster_path,
-          media_type: 'movie',
+          media_type: movie.media_type,
           watch_status: 'por ver',
         })
 
@@ -259,7 +299,7 @@ export default function Home() {
       setSaveError(
         err instanceof Error
           ? err.message
-          : 'Error al guardar la película.'
+          : 'Error al guardar el título.'
       )
     } finally {
       setSavingMovieId(null)
@@ -382,7 +422,7 @@ export default function Home() {
     const query = search.trim()
 
     if (!query) {
-      setSearchError('Escribe una película.')
+      setSearchError('Escribe una película o serie.')
       setHasSearched(false)
       return
     }
@@ -404,7 +444,7 @@ export default function Home() {
 
     try {
       const response = await fetch(
-        `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(query)}&language=es-ES&page=1&include_adult=false`
+        `https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${encodeURIComponent(query)}&language=es-ES&page=1&include_adult=false`
       )
 
       if (!response.ok) {
@@ -412,7 +452,11 @@ export default function Home() {
       }
 
       const data: TMDBResponse = await response.json()
-      setSearchResults(data.results ?? [])
+      setSearchResults(
+        (data.results ?? []).filter(
+          (item) => item.media_type === 'movie' || item.media_type === 'tv'
+        )
+      )
     } catch (err) {
       setSearchResults([])
       setSearchError(
@@ -439,7 +483,7 @@ export default function Home() {
     const title = movie.title ?? movie.name ?? 'Título no disponible'
 
     return (
-      <article className="catalog-flip-card" key={movie.id}>
+      <article className="catalog-flip-card" key={movieKey(movie)}>
         <div className="catalog-flip-inner">
           <div className="catalog-flip-front">
             <button
@@ -463,6 +507,9 @@ export default function Home() {
               )}
               <div className="catalog-front-overlay">
                 <h3>{title}</h3>
+                <span className="catalog-front-year">
+                  {movie.media_type === 'tv' ? 'SERIE' : 'PELÍCULA'}
+                </span>
                 <span className="catalog-flip-hint">VER DETALLES ↗</span>
               </div>
             </button>
@@ -477,6 +524,7 @@ export default function Home() {
     return (
       <MovieDetails
         movieId={selectedMovie.movie_id}
+        mediaType={selectedMovie.media_type}
         title={selectedMovie.title}
         posterPath={selectedMovie.poster_path}
         personalRating={selectedMovie.personal_rating}
@@ -513,7 +561,7 @@ export default function Home() {
         </h1>
 
         <p>
-          Descubre nuevas películas, guarda tus favoritas
+          Descubre películas y series, guarda tus favoritas
           y construye una colección que cuente tu historia.
         </p>
       </section>
@@ -558,14 +606,14 @@ export default function Home() {
               type="button"
               className="featured-button"
               disabled={
-                savedMovieIds.includes(featuredMovie.id) ||
-                savingMovieId === featuredMovie.id
+                savedKeys.has(movieKey(featuredMovie)) ||
+                savingMovieId === movieKey(featuredMovie)
               }
               onClick={() => handleSaveMovie(featuredMovie)}
             >
-              {savingMovieId === featuredMovie.id
+              {savingMovieId === movieKey(featuredMovie)
                 ? 'Guardando...'
-                : savedMovieIds.includes(featuredMovie.id)
+                : savedKeys.has(movieKey(featuredMovie))
                   ? '✓ En mi colección'
                   : '+ Añadir a mi colección'}
             </button>
@@ -581,7 +629,7 @@ export default function Home() {
         <span className="editorial-eyebrow">
           DESCUBRIR NUEVAS HISTORIAS
         </span>
-        <h2>Explorar películas</h2>
+        <h2>Explorar películas y series</h2>
 
         <form
           className="movie-search-form"
@@ -591,8 +639,8 @@ export default function Home() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Busca una película por su nombre..."
-            aria-label="Buscar películas"
+            placeholder="Busca una película o serie por su nombre..."
+            aria-label="Buscar películas y series"
           />
 
           <button type="submit" disabled={searching}>
@@ -607,7 +655,7 @@ export default function Home() {
         </form>
 
         {searchError && <p role="alert">{searchError}</p>}
-        {searching && <p>Buscando películas...</p>}
+        {searching && <p>Buscando películas y series...</p>}
         {saveMessage && <p role="status">{saveMessage}</p>}
         {saveError && <p role="alert">{saveError}</p>}
 
@@ -620,7 +668,7 @@ export default function Home() {
                 {searchResults.map(renderMovie)}
               </div>
             ) : (
-              <p>No encontramos películas con ese nombre.</p>
+              <p>No encontramos películas ni series con ese nombre.</p>
             )}
           </div>
         )}
@@ -638,14 +686,14 @@ export default function Home() {
             </span>
             <h2>Mi colección personal<span>.</span></h2>
             <p>
-              Cada película es una historia que forma
+              Cada película y serie es una historia que forma
               parte de tu colección.
             </p>
           </div>
 
           <div className="collection-total">
             <strong>{counts.todas}</strong>
-            <span>PELÍCULAS</span>
+            <span>TÍTULOS</span>
           </div>
         </div>
 
@@ -705,13 +753,13 @@ export default function Home() {
                 <h3>
                   {myList.length === 0
                     ? 'Tu colección comienza aquí.'
-                    : 'Todavía no hay películas en esta categoría.'}
+                    : 'Todavía no hay títulos en esta categoría.'}
                 </h3>
                 <p>
-                  Explora películas y construye
+                  Explora películas y series y construye
                   tu propio archivo cinematográfico.
                 </p>
-                <a href="#explorar">Explorar películas →</a>
+                <a href="#explorar">Explorar títulos →</a>
               </div>
             ) : (
               <div className="collection-grid">
@@ -744,6 +792,9 @@ export default function Home() {
 
                     <div className="collection-card-info">
                       <h3>{movie.title}</h3>
+                      <span className="editorial-eyebrow">
+                        {movie.media_type === 'tv' ? 'SERIE' : 'PELÍCULA'}
+                      </span>
 
                       <p className="collection-rating">
                         {movie.personal_rating
@@ -834,7 +885,7 @@ export default function Home() {
 
       <div className="cinema-expanded-content">
         <span className="editorial-eyebrow">
-          MI CARTELERA / FICHA CINEMATOGRÁFICA
+          {expandedMovie.media_type === 'tv' ? 'MI CARTELERA / SERIE' : 'MI CARTELERA / PELÍCULA'}
         </span>
 
         <h2>
@@ -852,6 +903,15 @@ export default function Home() {
           <span>
             ★ {Number(expandedMovie.vote_average ?? 0).toFixed(1)} / 10 TMDB
           </span>
+          {expandedMovie.media_type === 'tv' && (
+            <span>
+              {loadingSeasons
+                ? 'Consultando temporadas...'
+                : expandedSeasons === null
+                  ? 'Temporadas no disponibles'
+                  : `${expandedSeasons} ${expandedSeasons === 1 ? 'temporada' : 'temporadas'}`}
+            </span>
+          )}
         </div>
 
         <div className="cinema-expanded-divider" />
@@ -869,13 +929,13 @@ export default function Home() {
           className="cinema-expanded-add"
           onClick={() => handleSaveMovie(expandedMovie)}
           disabled={
-            savedMovieIds.includes(expandedMovie.id) ||
-            savingMovieId === expandedMovie.id
+            savedKeys.has(movieKey(expandedMovie)) ||
+            savingMovieId === movieKey(expandedMovie)
           }
         >
-          {savingMovieId === expandedMovie.id
+          {savingMovieId === movieKey(expandedMovie)
             ? 'Guardando...'
-            : savedMovieIds.includes(expandedMovie.id)
+            : savedKeys.has(movieKey(expandedMovie))
               ? '✓ En mi colección'
               : '+ Añadir a mi colección'}
         </button>
@@ -915,7 +975,7 @@ export default function Home() {
 
             <h2 id="editor-title">{editingMovie.title}</h2>
             <p className="editor-subtitle">
-              Personaliza tu experiencia con esta película.
+              Personaliza tu experiencia con este título.
             </p>
 
             <label htmlFor="editor-status">
@@ -986,7 +1046,7 @@ export default function Home() {
             <textarea
               id="editor-comment"
               rows={4}
-              placeholder="¿Qué te hizo sentir esta película?"
+              placeholder="¿Qué te hizo sentir esta historia?"
               value={editComment[editingMovie.id] ?? ''}
               onChange={(event) => {
                 setEditComment((previous) => ({

@@ -2,7 +2,10 @@
 import { useEffect, useState } from 'react'
 import '../App.css'
 
+type MediaType = 'movie' | 'tv'
+
 type MovieDetailsProps = {
+  mediaType: MediaType
   movieId: number
   title: string
   posterPath: string | null
@@ -12,13 +15,18 @@ type MovieDetailsProps = {
 }
 
 type MovieDetailsData = {
-  title: string
+  title?: string
+  name?: string
   overview: string
   poster_path: string | null
   backdrop_path: string | null
-  release_date: string
+  release_date?: string
+  first_air_date?: string
   vote_average: number
-  runtime: number | null
+  runtime?: number | null
+  episode_run_time?: number[]
+  number_of_seasons?: number
+  number_of_episodes?: number
   tagline: string
   genres: {
     id: number
@@ -28,6 +36,7 @@ type MovieDetailsData = {
 
 export default function MovieDetails({
   movieId,
+  mediaType,
   title,
   posterPath,
   personalRating,
@@ -59,12 +68,12 @@ export default function MovieDetails({
 
       try {
         const response = await fetch(
-          `https://api.themoviedb.org/3/movie/${movieId}?api_key=${apiKey}&language=es-ES`
+          `https://api.themoviedb.org/3/${mediaType}/${movieId}?api_key=${apiKey}&language=es-ES`
         )
 
         if (!response.ok) {
           throw new Error(
-            'No se pudieron cargar los detalles de la película.'
+            'No se pudieron cargar los detalles del título.'
           )
         }
 
@@ -79,7 +88,7 @@ export default function MovieDetails({
           setError(
             err instanceof Error
               ? err.message
-              : 'Ocurrió un error al cargar la película.'
+              : 'Ocurrió un error al cargar el título.'
           )
         }
       } finally {
@@ -94,25 +103,29 @@ export default function MovieDetails({
     return () => {
       cancelled = true
     }
-  }, [movieId])
+  }, [movieId, mediaType])
 
-  const movieTitle = details?.title || title
+  const movieTitle = details?.title || details?.name || title
 
-  const year = details?.release_date
-    ? details.release_date.slice(0, 4)
-    : 'Sin fecha'
+  const releaseDate = details?.release_date ?? details?.first_air_date
+  const year = releaseDate ? releaseDate.slice(0, 4) : 'Sin fecha'
 
   const imagePath =
     details?.poster_path ?? posterPath
 
   const rating = Number(details?.vote_average ?? 0)
 
-  const runtime = details?.runtime
+  const runtime = mediaType === 'tv'
+    ? details?.episode_run_time?.[0]
+    : details?.runtime
 
   const duration =
     runtime != null && runtime > 0
       ? `${Math.floor(runtime / 60)}h ${runtime % 60}min`
       : 'No disponible'
+
+  const durationLabel = mediaType === 'tv' ? 'DURACIÓN POR EPISODIO' : 'DURACIÓN'
+  const isSeries = mediaType === 'tv'
 
   return (
     <main className="editorial-details-page">
@@ -145,7 +158,7 @@ export default function MovieDetails({
           <h1>Preparando tu próxima escena...</h1>
 
           <p>
-            Cargando información de la película.
+            Cargando información del título.
           </p>
         </div>
       )}
@@ -153,7 +166,7 @@ export default function MovieDetails({
       {/* ERROR */}
       {error && (
         <div className="details-loading">
-          <h1>No pudimos cargar la película.</h1>
+          <h1>No pudimos cargar el título.</h1>
 
           <p role="alert">{error}</p>
 
@@ -234,7 +247,7 @@ export default function MovieDetails({
             <div className="details-overview-content">
 
               <span className="editorial-eyebrow">
-                01 / SOBRE LA PELÍCULA
+                01 / SOBRE LA {isSeries ? 'SERIE' : 'PELÍCULA'}
               </span>
 
               <h2>
@@ -257,7 +270,7 @@ export default function MovieDetails({
 
               <p className="details-synopsis">
                 {details.overview ||
-                  'No hay una sinopsis disponible para esta película.'}
+                  'No hay una sinopsis disponible para este título.'}
               </p>
 
               <div className="details-film-data">
@@ -268,9 +281,16 @@ export default function MovieDetails({
                 </div>
 
                 <div>
-                  <span>DURACIÓN</span>
+                  <span>{durationLabel}</span>
                   <strong>{duration}</strong>
                 </div>
+
+                {isSeries && (
+                  <div>
+                    <span>TEMPORADAS</span>
+                    <strong>{details.number_of_seasons ?? 'No disponible'}</strong>
+                  </div>
+                )}
 
                 <div>
                   <span>VALORACIÓN TMDB</span>
@@ -299,7 +319,7 @@ export default function MovieDetails({
               </h2>
 
               <p>
-                Cada película deja una impresión.
+                Cada historia deja una impresión.
                 Esta es la tuya.
               </p>
 
@@ -332,7 +352,7 @@ export default function MovieDetails({
               <p className="details-rating-label">
                 {personalRating
                   ? `${personalRating} de 5 estrellas`
-                  : 'Todavía no has calificado esta película.'}
+                  : 'Todavía no has calificado este título.'}
               </p>
 
               <div className="details-divider" />
@@ -344,7 +364,7 @@ export default function MovieDetails({
               <p className="details-personal-comment">
                 {personalComment?.trim()
                   ? personalComment
-                  : 'Aún no has escrito un comentario para esta película. Puedes hacerlo desde el editor de tu colección.'}
+                  : 'Aún no has escrito un comentario para este título. Puedes hacerlo desde el editor de tu colección.'}
               </p>
 
               <span className="details-review-signature">
@@ -368,7 +388,7 @@ export default function MovieDetails({
             </h2>
 
             <p>
-              Sigue descubriendo películas y construyendo
+              Sigue descubriendo películas y series y construyendo
               tu propia colección cinematográfica.
             </p>
 
